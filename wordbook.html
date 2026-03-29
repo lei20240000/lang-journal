@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Wordbook - Language Journal AI</title>
+  <link rel="manifest" href="/manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+</head>
+<body class="bg-base-200 min-h-screen p-4 max-w-2xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-primary">My Wordbook</h2>
+    <button class="btn btn-ghost" onclick="location.href='index.html'">Back</button>
+  </div>
+  
+  <div id="wordList" class="grid gap-4">
+    <!-- 单词卡片加载区 -->
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script>
+    // 替换为你的Supabase密钥
+    const supabase = window.supabase.createClient("https://gaacvbgquvavfbvusxqh.supabase.co", "sb_publishable_l6T6pL8TWARzIwdSMOXYBQ_bZaHlDoa");
+    const USER_ID = localStorage.getItem('uid');
+
+    // 加载单词本
+    async function loadWords() {
+      if (!USER_ID) return;
+      const { data, error } = await supabase.from('user_words')
+        .select('*').order('created_at', { ascending: false });
+      
+      const listEl = document.getElementById('wordList');
+      if (data?.length === 0) {
+        listEl.innerHTML = '<div class="text-center opacity-50 mt-10">No words collected yet. Process a journal to add words!</div>';
+        return;
+      }
+      // 渲染单词卡片
+      listEl.innerHTML = data.map(item => `
+        <div class="card bg-base-100 shadow-sm border border-base-300">
+          <div class="card-body p-4">
+            <h3 class="card-title text-secondary">${item.word}</h3>
+            <p class="text-sm italic text-gray-600">"${item.example}"</p>
+            <div class="card-actions justify-end mt-2">
+              <span class="badge badge-outline">${item.lang}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+    window.onload = loadWords;
+  </script>
+</body>
+</html>
