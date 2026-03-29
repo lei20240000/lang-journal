@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Membership Plans - Language Journal AI</title>
+  <link rel="manifest" href="/manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css" />
+</head>
+<body class="bg-base-200 min-h-screen p-4 md:p-6 max-w-4xl mx-auto">
+  <div class="text-center mb-8">
+    <h2 class="text-2xl font-bold mb-2">Membership Plans</h2>
+    <p class="text-gray-600">Unlock unlimited AI processing & full wordbook access</p>
+  </div>
+
+  <!-- 用户ID展示 -->
+  <div class="card bg-base-100 shadow-md p-4 mb-6 text-center">
+    <p class="text-sm mb-2">Your Unique Account ID</p>
+    <p class="font-mono text-lg font-semibold" id="uid">Loading...</p>
+    <div id="membershipStatus" class="mt-2 badge badge-lg">Free User</div>
+    <p class="text-xs text-orange-600 mt-2">💡 After payment, please wait 5-10 seconds for auto-sync</p>
+  </div>
+
+  <!-- 定价卡片 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <!-- 7天免费试用 -->
+    <div class="card bg-base-100 shadow-xl border border-base-300">
+      <div class="card-body">
+        <h3 class="card-title">7-Day Free Trial</h3>
+        <p class="text-2xl font-bold">$0</p>
+        <p class="text-sm text-gray-500 mb-4">Free trial, no payment required</p>
+        <ul class="list-disc list-inside mb-4 text-sm">
+          <li>Unlimited daily AI processing</li>
+          <li>Full wordbook storage</li>
+          <li>Voice input & playback</li>
+        </ul>
+        <button class="btn btn-primary" id="trialBtn">Activate Free Trial</button>
+      </div>
+    </div>
+
+    <!-- 季度订阅 -->
+    <div class="card bg-base-100 shadow-xl border border-base-300">
+      <div class="card-body">
+        <h3 class="card-title">Quarterly Subscription</h3>
+        <p class="text-2xl font-bold">$3.99</p>
+        <p class="text-sm text-gray-500 mb-4">Recurring every 3 months</p>
+        <ul class="list-disc list-inside mb-4 text-sm">
+          <li>Unlimited all features</li>
+          <li>No daily usage limits</li>
+          <li>Priority AI processing</li>
+        </ul>
+        <button class="btn btn-secondary" id="quarterlyBtn">Subscribe Now</button>
+      </div>
+    </div>
+
+    <!-- 年度订阅 -->
+    <div class="card bg-base-100 shadow-xl border-2 border-primary">
+      <div class="card-body">
+        <div class="badge badge-primary badge-sm absolute top-4 right-4">Most Popular</div>
+        <h3 class="card-title">Yearly Subscription</h3>
+        <p class="text-2xl font-bold">$14.99</p>
+        <p class="text-sm text-gray-500 mb-4">Recurring every 12 months</p>
+        <ul class="list-disc list-inside mb-4 text-sm">
+          <li>All premium features unlocked</li>
+          <li>Best value for long-term use</li>
+          <li>Full customer support</li>
+        </ul>
+        <button class="btn btn-primary" id="yearlyBtn">Subscribe Now</button>
+      </div>
+    </div>
+
+    <!-- 终身会员 -->
+    <div class="card bg-base-100 shadow-xl border border-base-300">
+      <div class="card-body">
+        <h3 class="card-title">Lifetime Access</h3>
+        <p class="text-2xl font-bold">$29.99</p>
+        <p class="text-sm text-gray-500 mb-4">One-time payment, no renewals</p>
+        <ul class="list-disc list-inside mb-4 text-sm">
+          <li>Permanent premium access</li>
+          <li>All future updates free</li>
+          <li>No recurring charges</li>
+        </ul>
+        <button class="btn btn-accent" id="lifetimeBtn">Buy Lifetime</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center">
+    <button class="btn btn-outline" onclick="location.href='index.html'">Back to Home</button>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  // 替换为你的Supabase密钥
+  const supabaseUrl = "https://gaacvbgquvavfbvusxqh.supabase.co";
+  const supabaseAnonKey = "sb_publishable_l6T6pL8TWARzIwdSMOXYBQ_bZaHlDoa";
+  const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+  const USER_ID = localStorage.getItem('uid');
+  const uidEl = document.getElementById('uid');
+  const statusEl = document.getElementById('membershipStatus');
+  let retryCount = 0;
+  const maxRetries = 3;
+
+  // 替换为你的Lemon Squeezy付款链接
+  const checkoutLinks = {
+    trial: "https://kingstream.lemonsqueezy.com/checkout/buy/66f0bd36-5c53-4b4f-b778-715e8fd6077c?enabled=1463811",
+    quarterly: "https://kingstream.lemonsqueezy.com/checkout/buy/66f0bd36-5c53-4b4f-b778-715e8fd6077c",
+    yearly: "https://kingstream.lemonsqueezy.com/checkout/buy/6bcf7017-7ad3-425b-a30c-4bf68af282dd?enabled=1463866",
+    lifetime: "你的终身会员链接"
+  };
+
+  // 初始化
+  window.onload = () => {
+    uidEl.textContent = USER_ID || 'Uninitialized';
+    checkMembershipStatus();
+  };
+
+  // 自动同步会员状态
+  async function checkMembershipStatus() {
+    if (!USER_ID) return;
+    try {
+      const { data } = await supabaseClient.from('users').select('membership,expiry_at').eq('id', USER_ID).single();
+      if (data) {
+        updateStatusUI(data.membership);
+        if (data.membership !== 'free' || retryCount >= maxRetries) return;
+        retryCount++;
+        setTimeout(checkMembershipStatus, 3000);
+      }
+    } catch (e) {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        setTimeout(checkMembershipStatus, 3000);
+      }
+    }
+  }
+
+  // 更新会员状态显示
+  function updateStatusUI(membership) {
+    let text = '';
+    let badgeClass = '';
+    if (membership === 'lifetime') {
+      text = 'Lifetime Member';
+      badgeClass = 'badge-accent';
+    } else if (['yearly','quarterly'].includes(membership)) {
+      text = 'Premium Member';
+      badgeClass = 'badge-primary';
+    } else if (membership === 'trial') {
+      text = 'Trial Member';
+      badgeClass = 'badge-secondary';
+    } else {
+      text = 'Free User (5x/Day Limit)';
+      badgeClass = 'badge-outline';
+    }
+    statusEl.className = `mt-2 badge badge-lg ${badgeClass}`;
+    statusEl.textContent = text;
+  }
+
+  // 跳转付款页面
+  function goCheckout(type) {
+    if (!USER_ID) { alert('Please use the app first to bind your account ID!'); return; }
+    const payUrl = `${checkoutLinks[type]}?custom[user_id]=${encodeURIComponent(USER_ID)}`;
+    window.open(payUrl, '_blank');
+    retryCount = 0;
+    setTimeout(checkMembershipStatus, 5000);
+  }
+
+  // 绑定按钮事件
+  document.getElementById('trialBtn').onclick = () => goCheckout('trial');
+  document.getElementById('quarterlyBtn').onclick = () => goCheckout('quarterly');
+  document.getElementById('yearlyBtn').onclick = () => goCheckout('yearly');
+  document.getElementById('lifetimeBtn').onclick = () => goCheckout('lifetime');
+</script>
+</body>
+</html>
