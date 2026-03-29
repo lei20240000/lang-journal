@@ -1,0 +1,16 @@
+{
+  "name": "Language Journal AI",
+  "short_name": "LangJournal",
+  "description": "Learn languages with AI-powered daily journals",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#007bff",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1041/1041916.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
