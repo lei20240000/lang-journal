@@ -38,7 +38,7 @@ export default async function handler(req, res) {
         'X-DashScope-SSE': 'disable'
       },
       body: JSON.stringify({
-        model: 'qwen-turbo',
+        model: 'Qwen3.5-Flash-2026-02-23',
         input: {
           messages: [
             {
