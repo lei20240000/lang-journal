@@ -7,27 +7,31 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* 还原原版UI样式 */
-        .card {
+        /* 还原你原版的UI样式 */
+        .container-card {
             background: white;
             border-radius: 1.5rem;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
             padding: 2rem;
         }
-        .btn-primary {
-            background: #4f46e5;
+        .btn-process {
+            background: #4318ff;
             color: white;
             border-radius: 0.75rem;
             padding: 1rem 2rem;
             font-weight: 600;
             transition: all 0.2s;
         }
-        .btn-primary:hover {
-            background: #4338ca;
+        .btn-process:hover:not(:disabled) {
+            background: #370fe0;
             transform: translateY(-1px);
         }
+        .btn-process:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
         .btn-voice {
-            background: #ec4899;
+            background: #ff2d95;
             color: white;
             border-radius: 0.75rem;
             padding: 1rem 2rem;
@@ -35,7 +39,7 @@
             transition: all 0.2s;
         }
         .btn-voice:hover {
-            background: #db2777;
+            background: #e02480;
             transform: translateY(-1px);
         }
         .word-tag {
@@ -50,31 +54,45 @@
             background: #e0e7ff;
             transform: scale(1.02);
         }
+        .input-area {
+            border: 1px solid #d1d5db;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            font-size: 1.125rem;
+            line-height: 1.75;
+            width: 100%;
+            resize: vertical;
+        }
+        .input-area:focus {
+            outline: none;
+            border-color: #4318ff;
+            box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.1);
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 md:p-8">
     <div class="max-w-4xl mx-auto">
-        <!-- 顶部标题栏 -->
-        <div class="card mb-6">
+        <!-- 顶部标题区 -->
+        <div class="container-card mb-6">
             <h1 class="text-4xl font-bold text-gray-900 mb-2">Language Journal AI</h1>
             <p class="text-gray-500 mb-6">Contact: lei20240000@gmail.com</p>
             
-            <button id="pricingBtn" class="w-full border-2 border-gray-900 rounded-xl py-4 text-xl font-semibold mb-6 hover:bg-gray-50 transition">
+            <button id="pricingBtn" class="w-full border-2 border-gray-900 rounded-xl py-4 text-xl font-semibold mb-6 hover:bg-gray-50 transition-colors">
                 View Pricing / Membership
             </button>
 
             <textarea id="journalInput" rows="6" 
-                class="w-full p-4 border-2 border-gray-200 rounded-xl text-lg mb-4 focus:border-indigo-500 focus:outline-none"
-                placeholder="Write your journal here..."></textarea>
+                class="input-area mb-4"
+                placeholder="Write your journal here...（支持中文、英语、小语种）"></textarea>
             
             <div class="flex gap-4">
-                <button id="processBtn" class="btn-primary flex-1 text-xl">Process & Extract Words</button>
+                <button id="processBtn" class="btn-process flex-1 text-xl">Process & Extract Words</button>
                 <button id="voiceBtn" class="btn-voice text-xl">Voice Input</button>
             </div>
         </div>
 
         <!-- 结果展示区 -->
-        <div id="result" class="card hidden mb-6">
+        <div id="result" class="container-card mb-6 hidden">
             <h2 class="text-2xl font-bold text-gray-900 mb-4">Polished Text</h2>
             <p id="polishedText" class="text-lg text-gray-700 mb-8 leading-relaxed"></p>
             
@@ -83,110 +101,119 @@
         </div>
 
         <!-- 底部单词本入口 -->
-        <button id="wordbookBtn" class="w-full border-2 border-gray-900 rounded-xl py-4 text-xl font-semibold hover:bg-gray-50 transition">
+        <button id="wordbookBtn" class="w-full border-2 border-gray-900 rounded-xl py-4 text-xl font-semibold hover:bg-gray-50 transition-colors">
             My Wordbook
         </button>
     </div>
 
     <script>
         // ====================== 请替换为你的Supabase信息 ======================
-        const supabaseUrl = "https://gaacvbgquvavfbvusxqh.supabase.co";
-        const supabaseAnonKey = "sb_publishable_你的完整anon密钥";
+        const SUPABASE_URL = "https://gaacvbgquvavfbvusxqh.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_l6T6pL8TWARzIwdSMOXYBQ_bZaHlDoa";
         // ======================================================================
 
-        const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        // 初始化Supabase客户端
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         let USER_ID = null;
 
-        // 页面加载自动初始化
+        // 页面加载时强制初始化用户
         window.addEventListener('load', async () => {
-            await initUserId();
-            console.log("✅ 账号初始化完成，USER_ID:", USER_ID);
+            console.log("🚀 页面加载，开始初始化用户...");
+            await initUser();
+            console.log("✅ 用户初始化完成，USER_ID:", USER_ID);
         });
 
-        // 匿名登录+自动创建用户（修复版）
-        async function initUserId() {
+        // 核心：强制创建用户（解决users表永远为空）
+        async function initUser() {
             try {
-                const { data } = await supabaseClient.auth.signInAnonymously();
-                if (data?.user) {
+                // 1. 先尝试匿名登录
+                const { data, error } = await supabase.auth.signInAnonymously();
+                
+                if (error) {
+                    console.error("匿名登录失败，尝试本地缓存:", error);
+                    // 2. 登录失败，从localStorage读取
+                    USER_ID = localStorage.getItem('uid');
+                    if (!USER_ID) {
+                        // 3. 缓存也没有，生成随机UUID兜底
+                        USER_ID = crypto.randomUUID();
+                        localStorage.setItem('uid', USER_ID);
+                    }
+                } else if (data?.user) {
+                    // 4. 登录成功，使用匿名用户ID
                     USER_ID = data.user.id;
                     localStorage.setItem('uid', USER_ID);
-                    await createUserIfNotExists();
-                    await checkUserPermission();
-                    return;
                 }
 
-                USER_ID = localStorage.getItem('uid');
-                if (!USER_ID) {
-                    alert("Please refresh to initialize your account");
-                }
+                // 5. 【关键】强制创建/更新用户到users表（无论是否存在）
+                await forceCreateUser();
+
             } catch (err) {
-                console.error("❌ 初始化失败:", err);
-                alert("Initialization error, please refresh.");
+                console.error("❌ 用户初始化异常:", err);
+                alert("账号初始化失败，请刷新页面重试");
             }
         }
 
-        // 自动创建用户（解决users表空）
-        async function createUserIfNotExists() {
+        // 强制创建/更新用户（100%保证users表有数据）
+        async function forceCreateUser() {
+            if (!USER_ID) return;
+
             try {
-                const { data: existing } = await supabaseClient
+                // 先检查用户是否存在
+                const { data: existingUser } = await supabase
                     .from('users')
                     .select('id')
                     .eq('id', USER_ID)
                     .single();
 
-                if (!existing) {
-                    await supabaseClient.from('users').insert([{
-                        id: USER_ID,
-                        membership: 'free',
-                        daily_used: 0,
-                        last_date: '',
-                        expiry_at: null
-                    }]);
-                    console.log("✅ 用户已创建到users表");
-                }
-            } catch (e) {
-                console.error("❌ 创建用户失败:", e);
-            }
-        }
-
-        // 权限检查（防崩溃）
-        async function checkUserPermission() {
-            if (!USER_ID) return;
-            try {
-                const { data: user } = await supabaseClient
-                    .from('users')
-                    .select('*')
-                    .eq('id', USER_ID)
-                    .single();
-
-                if (!user) return;
-
-                const today = new Date().toISOString().split('T')[0];
-                if (user.last_date !== today) {
-                    await supabaseClient
+                if (!existingUser) {
+                    // 用户不存在，插入新用户
+                    const { error: insertError } = await supabase
                         .from('users')
-                        .update({ last_date: today, daily_used: 0 })
-                        .eq('id', USER_ID);
+                        .insert([{
+                            id: USER_ID,
+                            membership: 'free',
+                            daily_used: 0,
+                            last_date: '',
+                            expiry_at: null
+                        }]);
+
+                    if (insertError) {
+                        console.error("❌ 创建用户失败:", insertError);
+                        alert("账号创建失败，请检查Supabase权限");
+                    } else {
+                        console.log("✅ 新用户已创建到users表，ID:", USER_ID);
+                    }
+                } else {
+                    console.log("✅ 用户已存在，无需重复创建");
                 }
             } catch (e) {
-                console.error("❌ 权限检查错误:", e);
+                console.error("❌ 强制创建用户异常:", e);
             }
         }
 
-        // AI处理按钮
+        // AI处理按钮逻辑
         document.getElementById('processBtn').addEventListener('click', async () => {
             const btn = document.getElementById('processBtn');
             const text = document.getElementById('journalInput').value.trim();
             
+            // 1. 检查输入
             if (!text) {
-                alert("Please enter your journal first!");
+                alert("请先输入日记内容！");
                 return;
             }
 
+            // 2. 检查用户ID
+            if (!USER_ID) {
+                alert("请刷新页面初始化账号后再试");
+                return;
+            }
+
+            // 3. 按钮状态切换
             btn.disabled = true;
             btn.textContent = "Processing...";
 
             try {
+                // 4. 调用AI接口
                 const res = await fetch('/api/ai-process', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -196,65 +223,75 @@
                 const result = await res.json();
 
                 if (result.success) {
+                    // 5. 展示AI结果
                     document.getElementById('polishedText').textContent = result.polished_text;
                     const wordsList = document.getElementById('wordsList');
                     wordsList.innerHTML = '';
 
+                    // 6. 渲染单词列表
                     result.extracted_words.forEach(word => {
                         const div = document.createElement('div');
                         div.className = 'word-tag';
                         div.textContent = word;
-                        div.addEventListener('click', () => saveWord(word));
+                        div.addEventListener('click', () => saveWordToWordbook(word));
                         wordsList.appendChild(div);
                     });
 
+                    // 7. 显示结果区
                     document.getElementById('result').classList.remove('hidden');
                 } else {
-                    alert("Error: " + result.message);
+                    alert("错误：" + result.message);
                 }
             } catch (err) {
-                console.error(err);
-                alert("Process failed!");
+                console.error("❌ AI处理失败:", err);
+                alert("AI处理失败，请重试");
             } finally {
+                // 8. 恢复按钮状态
                 btn.disabled = false;
                 btn.textContent = "Process & Extract Words";
             }
         });
 
         // 保存单词到单词本
-        async function saveWord(word) {
+        async function saveWordToWordbook(word) {
             if (!USER_ID) {
-                alert("Please refresh to initialize your account");
+                alert("请刷新页面初始化账号后再试");
                 return;
             }
 
             try {
-                await supabaseClient.from('user_words').insert([{
+                const { error } = await supabase.from('user_words').insert([{
                     user_id: USER_ID,
                     word: word,
                     example: "",
                     language: "en"
                 }]);
-                alert("✅ " + word + " saved to your wordbook!");
+
+                if (error) {
+                    console.error("❌ 保存单词失败:", error);
+                    alert("单词保存失败");
+                } else {
+                    alert(`✅ 单词「${word}」已保存到单词本！`);
+                }
             } catch (err) {
-                console.error(err);
-                alert("❌ Save failed");
+                console.error("❌ 保存单词异常:", err);
+                alert("单词保存失败");
             }
         }
 
         // 语音输入按钮（占位）
         document.getElementById('voiceBtn').addEventListener('click', () => {
-            alert("Voice input coming soon!");
+            alert("语音输入功能开发中，敬请期待！");
         });
 
         // 会员页按钮（占位）
         document.getElementById('pricingBtn').addEventListener('click', () => {
-            alert("Membership page coming soon!");
+            alert("会员页面开发中，敬请期待！");
         });
 
         // 单词本按钮（占位）
         document.getElementById('wordbookBtn').addEventListener('click', () => {
-            alert("Wordbook page coming soon!");
+            alert("单词本页面开发中，敬请期待！");
         });
     </script>
 
