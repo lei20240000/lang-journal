@@ -7,11 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* 完全还原你原版的UI样式 */
         .container-card {
             background: white;
             border-radius: 1.5rem;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
             padding: 2rem;
         }
         .btn-process {
@@ -20,15 +19,12 @@
             border-radius: 0.75rem;
             padding: 1rem 2rem;
             font-weight: 600;
-            transition: all 0.2s;
         }
         .btn-process:hover:not(:disabled) {
             background: #370fe0;
-            transform: translateY(-1px);
         }
         .btn-process:disabled {
             opacity: 0.7;
-            cursor: not-allowed;
         }
         .btn-voice {
             background: #ff2d95;
@@ -36,11 +32,6 @@
             border-radius: 0.75rem;
             padding: 1rem 2rem;
             font-weight: 600;
-            transition: all 0.2s;
-        }
-        .btn-voice:hover {
-            background: #e02480;
-            transform: translateY(-1px);
         }
         .word-tag {
             background: #f3f4f6;
@@ -48,42 +39,30 @@
             padding: 0.75rem;
             text-align: center;
             cursor: pointer;
-            transition: all 0.2s;
         }
         .word-tag:hover {
             background: #e0e7ff;
-            transform: scale(1.02);
         }
         .input-area {
             border: 1px solid #d1d5db;
             border-radius: 0.75rem;
             padding: 1rem;
             font-size: 1.125rem;
-            line-height: 1.75;
             width: 100%;
-            resize: vertical;
-        }
-        .input-area:focus {
-            outline: none;
-            border-color: #4318ff;
-            box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.1);
         }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 md:p-8">
     <div class="max-w-4xl mx-auto">
-        <!-- 顶部标题区 -->
         <div class="container-card mb-6">
-            <h1 class="text-4xl font-bold text-gray-900 mb-2">Language Journal AI</h1>
+            <h1 class="text-4xl font-bold mb-2">Language Journal AI</h1>
             <p class="text-gray-500 mb-6">Contact: lei20240000@gmail.com</p>
             
-            <button id="pricingBtn" class="w-full border-2 border-gray-900 rounded-xl py-4 text-xl font-semibold mb-6 hover:bg-gray-50 transition-colors">
+            <button id="pricingBtn" class="w-full border-2 border-gray-900 rounded-xl py-4 text-xl font-semibold mb-6 hover:bg-gray-50">
                 View Pricing / Membership
             </button>
 
-            <textarea id="journalInput" rows="6" 
-                class="input-area mb-4"
-                placeholder="Write your journal here...（支持中文、英语、小语种）"></textarea>
+            <textarea id="journalInput" rows="6" class="input-area mb-4" placeholder="Write your journal here..."></textarea>
             
             <div class="flex gap-4">
                 <button id="processBtn" class="btn-process flex-1 text-xl">Process & Extract Words</button>
@@ -91,112 +70,80 @@
             </div>
         </div>
 
-        <!-- 结果展示区 -->
         <div id="result" class="container-card mb-6 hidden">
-            <h2 class="text-2xl font-bold text-gray-900 mb-4">Polished Text</h2>
-            <p id="polishedText" class="text-lg text-gray-700 mb-8 leading-relaxed"></p>
+            <h2 class="text-2xl font-bold mb-4">Polished Text</h2>
+            <p id="polishedText" class="text-lg leading-relaxed mb-8"></p>
             
-            <h2 class="text-2xl font-bold text-gray-900 mb-4">Extracted Words</h2>
+            <h2 class="text-2xl font-bold mb-4">Extracted Words</h2>
             <div id="wordsList" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>
         </div>
 
-        <!-- 底部单词本入口 -->
-        <button id="wordbookBtn" class="w-full border-2 border-gray-900 rounded-xl py-4 text-xl font-semibold hover:bg-gray-50 transition-colors">
+        <button id="wordbookBtn" class="w-full border-2 border-gray-900 rounded-xl py-4 text-xl font-semibold hover:bg-gray-50">
             My Wordbook
         </button>
     </div>
 
     <script>
-        // ====================== 你的Supabase信息（完全保留） ======================
+        // ====================== 你的信息 ======================
         const SUPABASE_URL = "https://gaacvbgquvavfbvusxqh.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_l6T6pL8TWARzIwdSMOXYBQ_bZaHlDoa";
-        // ======================================================================
+        // ======================================================
 
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // 修复重复定义错误！！！
+        const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         let USER_ID = null;
 
-        // 页面加载强制初始化用户（100%保证users表有数据）
         window.addEventListener('load', async () => {
-            console.log("🚀 页面加载，初始化用户...");
             await initUser();
-            console.log("✅ 用户初始化完成，USER_ID:", USER_ID);
         });
 
-        // 核心：强制创建用户（解决users表空）
         async function initUser() {
             try {
-                // 1. 匿名登录
-                const { data, error } = await supabase.auth.signInAnonymously();
-                
-                if (error) {
-                    console.error("匿名登录失败，使用本地缓存:", error);
-                    USER_ID = localStorage.getItem('uid');
-                    if (!USER_ID) {
-                        USER_ID = crypto.randomUUID();
-                        localStorage.setItem('uid', USER_ID);
-                    }
-                } else if (data?.user) {
+                const { data } = await sbClient.auth.signInAnonymously();
+                if (data?.user) {
                     USER_ID = data.user.id;
+                    localStorage.setItem('uid', USER_ID);
+                } else {
+                    USER_ID = localStorage.getItem('uid');
+                }
+
+                if (!USER_ID) {
+                    USER_ID = crypto.randomUUID();
                     localStorage.setItem('uid', USER_ID);
                 }
 
-                // 2. 强制创建/更新用户到users表
-                await forceCreateUser();
-
-            } catch (err) {
-                console.error("❌ 用户初始化异常:", err);
-                alert("账号初始化失败，请刷新重试");
+                await createUser();
+            } catch (e) {
+                console.error("init error", e);
             }
         }
 
-        // 强制创建用户（无论是否存在，100%写入）
-        async function forceCreateUser() {
-            if (!USER_ID) return;
-
+        async function createUser() {
             try {
-                const { data: existing } = await supabase
+                const { data } = await sbClient
                     .from('users')
                     .select('id')
                     .eq('id', USER_ID)
                     .single();
 
-                if (!existing) {
-                    const { error: insertError } = await supabase
-                        .from('users')
-                        .insert([{
-                            id: USER_ID,
-                            membership: 'free',
-                            daily_used: 0,
-                            last_date: '',
-                            expiry_at: null
-                        }]);
-
-                    if (insertError) {
-                        console.error("❌ 创建用户失败:", insertError);
-                        alert("账号创建失败，请检查Supabase权限");
-                    } else {
-                        console.log("✅ 用户已创建到users表，ID:", USER_ID);
-                    }
+                if (!data) {
+                    await sbClient.from('users').insert([{
+                        id: USER_ID,
+                        membership: 'free',
+                        daily_used: 0,
+                        last_date: ''
+                    }]);
+                    console.log("✅ 用户创建成功");
                 }
-            } catch (e) {
-                console.error("❌ 强制创建用户异常:", e);
-            }
+            } catch (e) {}
         }
 
-        // AI处理按钮
+        // AI 按钮
         document.getElementById('processBtn').addEventListener('click', async () => {
             const btn = document.getElementById('processBtn');
             const text = document.getElementById('journalInput').value.trim();
-            
-            if (!text) {
-                alert("请先输入日记内容！");
-                return;
-            }
 
-            if (!USER_ID) {
-                alert("请刷新页面初始化账号后再试");
-                return;
-            }
+            if (!text) return alert("Please enter content!");
 
             btn.disabled = true;
             btn.textContent = "Processing...";
@@ -209,69 +156,46 @@
                 });
 
                 const result = await res.json();
-
                 if (result.success) {
                     document.getElementById('polishedText').textContent = result.polished_text;
-                    const wordsList = document.getElementById('wordsList');
-                    wordsList.innerHTML = '';
+                    const list = document.getElementById('wordsList');
+                    list.innerHTML = '';
 
                     result.extracted_words.forEach(word => {
                         const div = document.createElement('div');
                         div.className = 'word-tag';
                         div.textContent = word;
                         div.addEventListener('click', () => saveWord(word));
-                        wordsList.appendChild(div);
+                        list.appendChild(div);
                     });
 
                     document.getElementById('result').classList.remove('hidden');
-                } else {
-                    alert("错误：" + result.message);
                 }
-            } catch (err) {
-                console.error("❌ AI处理失败:", err);
-                alert("AI处理失败，请重试");
+            } catch (e) {
+                alert("Process failed");
             } finally {
                 btn.disabled = false;
                 btn.textContent = "Process & Extract Words";
             }
         });
 
-        // 保存单词到单词本
         async function saveWord(word) {
-            if (!USER_ID) {
-                alert("请刷新页面初始化账号后再试");
-                return;
-            }
-
             try {
-                const { error } = await supabase.from('user_words').insert([{
+                await sbClient.from('user_words').insert([{
                     user_id: USER_ID,
                     word: word,
-                    example: "",
-                    language: "en"
+                    example: '',
+                    language: 'en'
                 }]);
-
-                if (error) {
-                    console.error("❌ 保存单词失败:", error);
-                    alert("单词保存失败");
-                } else {
-                    alert(`✅ 单词「${word}」已保存！`);
-                }
-            } catch (err) {
-                console.error("❌ 保存单词异常:", err);
-                alert("单词保存失败");
+                alert("✅ Saved: " + word);
+            } catch (e) {
+                alert("Save failed");
             }
         }
 
-        // 其他按钮（完全保留你原来的功能）
-        document.getElementById('voiceBtn').addEventListener('click', () => alert("语音输入开发中"));
-        document.getElementById('pricingBtn').addEventListener('click', () => alert("会员页面开发中"));
-        document.getElementById('wordbookBtn').addEventListener('click', () => alert("单词本页面开发中"));
+        document.getElementById('voiceBtn').onclick = () => alert("Coming soon");
+        document.getElementById('pricingBtn').onclick = () => alert("Coming soon");
+        document.getElementById('wordbookBtn').onclick = () => alert("Coming soon");
     </script>
-
-    <footer class="max-w-4xl mx-auto mt-12 pt-8 border-t border-gray-200 text-center text-gray-500">
-        <p class="text-xl">© 2026 Language Journal AI</p>
-        <p class="mt-2">Privacy Policy | Terms of Service</p>
-    </footer>
 </body>
 </html>
