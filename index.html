@@ -1,201 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Language Journal AI - Learn Languages with Daily Journals</title>
-  <!-- PWA核心配置 -->
-  <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#007bff">
-  <!-- 统一样式框架：Tailwind+DaisyUI -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css" />
-  <!-- Service Worker注册，实现PWA离线缓存 -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js');
-      });
-    }
-  </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Language Journal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-base-200 min-h-screen p-4 md:p-6 max-w-3xl mx-auto">
-  <div class="card bg-base-100 shadow-xl p-6 mb-6">
-    <h2 class="text-2xl font-bold mb-2">Language Journal AI</h2>
-    <p class="text-sm text-gray-600 mb-4">Contact: lei20240000@gmail.com</p>
-    <button class="btn btn-outline mb-4" onclick="location.href='member.html'">View Pricing / Membership</button>
-    
-    <textarea id="inputContent" class="textarea textarea-bordered h-32 mb-4" placeholder="Enter your daily journal to learn words..."></textarea>
-    <div class="flex gap-2 flex-col sm:flex-row mb-4">
-      <button class="btn btn-primary" id="processBtn">Process & Extract Words</button>
-      <button class="btn btn-secondary" id="voiceBtn">Voice Input</button>
+<body class="bg-gray-100 min-h-screen">
+    <div class="max-w-4xl mx-auto p-4">
+        <h1 class="text-3xl font-bold text-center mb-6 text-blue-600">Language Journal</h1>
+        
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <textarea id="journalInput" rows="6" class="w-full p-3 border rounded mb-4 text-lg" placeholder="Write your journal here..."></textarea>
+            <button id="processBtn" class="w-full bg-blue-600 text-white p-3 rounded text-lg font-semibold hover:bg-blue-700">Process & Extract Words</button>
+        </div>
+
+        <div id="result" class="bg-white rounded-lg shadow p-6 hidden">
+            <h2 class="text-xl font-bold mb-2">Polished Text:</h2>
+            <p id="polishedText" class="mb-4 text-lg"></p>
+            
+            <h2 class="text-xl font-bold mb-2">Extracted Words:</h2>
+            <div id="wordsList" class="grid grid-cols-2 gap-2"></div>
+        </div>
     </div>
 
-    <!-- AI加载占位动画 -->
-    <div id="loadingSkeleton" class="hidden skeleton h-20 w-full rounded-md mb-4"></div>
+    <script>
+        // ====================== 请确认你的 Supabase 信息 ======================
+        const supabaseUrl = "https://gaacvbgquvavfbvusxqh.supabase.co";
+        const supabaseAnonKey = "sb_publishable_你的密钥";
+        // ======================================================================
 
-    <!-- 结果展示区域 -->
-    <div id="resultArea" class="hidden card bg-base-200 p-4 rounded-lg">
-      <h4 class="font-semibold mb-2">Polished Text:</h4>
-      <p id="polishedText" class="mb-4"></p>
-      <h4 class="font-semibold mb-2">Extracted Words:</h4>
-      <div id="keywordsBox" class="flex flex-wrap gap-2 mb-4"></div>
-      <button class="btn btn-accent" id="playBtn">Play Audio</button>
-    </div>
-  </div>
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        let USER_ID = null;
 
-  <button class="btn btn-outline w-full mb-6" onclick="location.href='wordbook.html'">My Wordbook</button>
+        // 页面加载时自动初始化用户
+        window.addEventListener('load', async () => {
+            await initUserId();
+            console.log("✅ 初始化完成，USER_ID:", USER_ID);
+        });
 
-  <!-- Lemon审核必备：合规链接 -->
-  <footer class="text-center text-sm text-gray-500 mt-8 pt-4 border-t">
-    <p>© 2026 Language Journal AI</p>
-    <p class="mt-1"><a href="privacy.html" target="_blank" class="link link-hover">Privacy Policy</a> | <a href="terms.html" target="_blank" class="link link-hover">Terms of Service</a></p>
-  </footer>
+        // 匿名登录 + 自动创建用户（修复版）
+        async function initUserId() {
+            try {
+                const { data } = await supabaseClient.auth.signInAnonymously();
+                if (data?.user) {
+                    USER_ID = data.user.id;
+                    localStorage.setItem('uid', USER_ID);
+                    await createUserIfNotExists();
+                    await checkUserPermission();
+                    return;
+                }
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script>
-  // 替换为你的Supabase密钥
-  const supabaseUrl = "https://gaacvbgquvavfbvusxqh.supabase.co";
-  const supabaseAnonKey = "sb_publishable_l6T6pL8TWARzIwdSMOXYBQ_bZaHlDoa";
-  const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+                USER_ID = localStorage.getItem('uid');
+                if (!USER_ID) {
+                    alert("Please refresh to initialize your account");
+                }
+            } catch (err) {
+                console.error("❌ 初始化失败:", err);
+                alert("Initialization error, please refresh.");
+            }
+        }
 
-  let USER_ID = null;
-  let isPremium = false;
-  const FREE_DAILY_LIMIT = 5;
-  const loadingSkeleton = document.getElementById('loadingSkeleton');
-  const resultArea = document.getElementById('resultArea');
-  const processBtn = document.getElementById('processBtn');
+        // 自动创建用户（解决 users 表永远为空）
+        async function createUserIfNotExists() {
+            try {
+                const { data: existing } = await supabaseClient
+                    .from('users')
+                    .select('id')
+                    .eq('id', USER_ID)
+                    .single();
 
-  // Supabase匿名登录生成唯一ID
-  async function initUserId() {
-    const { data } = await supabaseClient.auth.signInAnonymously();
-    if (data?.user) {
-      USER_ID = data.user.id;
-      localStorage.setItem('uid', USER_ID);
-      await checkUserPermission();
-      return;
-    }
-    USER_ID = localStorage.getItem('uid');
-    if (!USER_ID) alert('Please refresh to initialize your account');
-  }
+                if (!existing) {
+                    await supabaseClient.from('users').insert([{
+                        id: USER_ID,
+                        membership: 'free',
+                        daily_used: 0,
+                        last_date: '',
+                        expiry_at: null
+                    }]);
+                    console.log("✅ 用户已创建到 users 表");
+                }
+            } catch (e) {
+                console.error("❌ 创建用户失败:", e);
+            }
+        }
 
-  // 会员权限校验
-  async function checkUserPermission() {
-    if (!USER_ID) return;
-    const today = new Date().toISOString().split('T')[0];
-    try {
-      const { data: user } = await supabaseClient.from('users')
-        .select('membership,expiry_at,daily_used,last_date').eq('id', USER_ID).single();
+        // 权限检查（防崩溃）
+        async function checkUserPermission() {
+            if (!USER_ID) return;
+            try {
+                const { data: user } = await supabaseClient
+                    .from('users')
+                    .select('*')
+                    .eq('id', USER_ID)
+                    .single();
 
-      if (!user) {
-        await supabaseClient.from('users').insert({ id: USER_ID, membership: 'free', daily_used: 0, last_date: today });
-        isPremium = false;
-        return;
-      }
+                if (!user) return;
 
-      // 判定会员状态
-      if (user.membership === 'lifetime') isPremium = true;
-      else if (['trial','quarterly','yearly'].includes(user.membership)) {
-        isPremium = !user.expiry_at || new Date(user.expiry_at) > new Date();
-      } else isPremium = false;
+                const today = new Date().toISOString().split('T')[0];
+                if (user.last_date !== today) {
+                    await supabaseClient
+                        .from('users')
+                        .update({ last_date: today, daily_used: 0 })
+                        .eq('id', USER_ID);
+                }
+            } catch (e) {
+                console.error("❌ 权限检查错误:", e);
+            }
+        }
 
-      // 跨日重置次数
-      if (user.last_date !== today) {
-        await supabaseClient.from('users').update({ daily_used: 0, last_date: today }).eq('id', USER_ID);
-      }
-    } catch (e) { isPremium = false; }
-  }
+        // AI 处理按钮
+        document.getElementById('processBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('processBtn');
+            const text = document.getElementById('journalInput').value.trim();
+            
+            if (!text) {
+                alert("Please enter your journal first!");
+                return;
+            }
 
-  // 免费用户限次
-  async function checkDailyLimit() {
-    if (isPremium) return true;
-    const { data: user } = await supabaseClient.from('users').select('daily_used').eq('id', USER_ID).single();
-    if (user.daily_used >= FREE_DAILY_LIMIT) {
-      alert('Daily free limit reached! Upgrade to premium for unlimited access.');
-      location.href = 'member.html';
-      return false;
-    }
-    await supabaseClient.from('users').update({ daily_used: user.daily_used + 1 }).eq('id', USER_ID);
-    return true;
-  }
+            btn.disabled = true;
+            btn.textContent = "Processing...";
 
-  // AI处理逻辑
-  processBtn.onclick = async () => {
-    const content = document.getElementById('inputContent').value.trim();
-    if (!content) { alert('Please enter content first'); return; }
-    if (!await checkDailyLimit()) return;
+            try {
+                const res = await fetch('/api/ai-process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
 
-    // 加载状态
-    loadingSkeleton.classList.remove('hidden');
-    resultArea.classList.add('hidden');
-    processBtn.disabled = true;
-    processBtn.textContent = 'Processing...';
+                const result = await res.json();
 
-    try {
-      const res = await fetch('/api/ai-process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inputText: content, userId: USER_ID, lang: navigator.language || 'en-US' })
-      });
-      const data = await res.json();
-      if (!data.success) { alert(data.message); return; }
+                if (result.success) {
+                    document.getElementById('polishedText').textContent = result.polished_text;
+                    const wordsList = document.getElementById('wordsList');
+                    wordsList.innerHTML = '';
 
-      // 渲染结果
-      document.getElementById('polishedText').textContent = data.polished;
-      const keywordsBox = document.getElementById('keywordsBox');
-      keywordsBox.innerHTML = '';
-      data.keywords.forEach(word => {
-        const tag = document.createElement('span');
-        tag.className = 'badge badge-outline';
-        tag.textContent = word;
-        // 添加到单词本
-        tag.onclick = async () => {
-          await supabaseClient.from('user_words').insert({
-            word: word, example: data.polished, lang: data.lang, user_id: USER_ID
-          });
-          alert(`Added ${word} to wordbook!`);
-        };
-        keywordsBox.appendChild(tag);
-      });
-      resultArea.classList.remove('hidden');
-    } catch (e) {
-      alert('Request failed, please check network');
-    } finally {
-      // 恢复按钮
-      loadingSkeleton.classList.add('hidden');
-      processBtn.disabled = false;
-      processBtn.textContent = 'Process & Extract Words';
-    }
-  };
+                    result.extracted_words.forEach(word => {
+                        const div = document.createElement('div');
+                        div.className = 'bg-gray-100 p-2 rounded text-center cursor-pointer hover:bg-blue-100';
+                        div.textContent = word;
+                        div.addEventListener('click', () => saveWord(word));
+                        wordsList.appendChild(div);
+                    });
 
-  // 语音输入
-  function initVoiceInput() {
-    const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Rec) { document.getElementById('voiceBtn').disabled = true; return; }
-    const rec = new Rec();
-    rec.lang = navigator.language || 'en-US';
-    document.getElementById('voiceBtn').onclick = () => {
-      rec.start(); alert('Start speaking...');
-    };
-    rec.onresult = (e) => {
-      document.getElementById('inputContent').value = e.results[0][0].transcript;
-    };
-  }
+                    document.getElementById('result').classList.remove('hidden');
+                } else {
+                    alert("Error: " + result.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Process failed!");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Process & Extract Words";
+            }
+        });
 
-  // 语音朗读
-  document.getElementById('playBtn').onclick = () => {
-    const text = document.getElementById('polishedText').textContent;
-    if (!window.speechSynthesis) { alert('Your device does not support audio playback'); return; }
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = navigator.language || 'en-US';
-    window.speechSynthesis.speak(utter);
-  };
+        // 保存单词到单词本
+        async function saveWord(word) {
+            if (!USER_ID) {
+                alert("Please refresh to initialize your account");
+                return;
+            }
 
-  // 初始化
-  window.onload = () => {
-    initUserId();
-    initVoiceInput();
-  };
-</script>
+            try {
+                await supabaseClient.from('user_words').insert([{
+                    user_id: USER_ID,
+                    word: word,
+                    example: "",
+                    language: "en"
+                }]);
+                alert("✅ " + word + " saved to your wordbook!");
+            } catch (err) {
+                console.error(err);
+                alert("❌ Save failed");
+            }
+        }
+    </script>
 </body>
 </html>
