@@ -1,5 +1,4 @@
 {
   "outputDirectory": ".",
-  "buildCommand": "echo 'No build required'",
-  "framework": "static"
+  "buildCommand": "echo 'No build required'"
 }
